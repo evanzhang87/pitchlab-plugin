@@ -14,8 +14,22 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Prepare Steinberg VST3 SDK (with submodules + vst2.x)
+        run: |
+          if [ ! -f vst3sdk/pluginterfaces/vst2.x/vstfxstore.h ]; then
+            rm -rf vst3sdk
+            git clone --depth 1 --recursive --branch v3.7.4_build_25 \
+              https://github.com/steinbergmedia/vst3sdk.git vst3sdk
+          fi
+          if [ -f vst3sdk/pluginterfaces/vst2.x/vstfxstore.h ]; then
+            echo "SDK OK: vstfxstore.h present"
+          else
+            echo "SDK BROKEN:"; ls vst3sdk/pluginterfaces 2>&1 || true
+            exit 1
+          fi
+
       - name: Configure
-        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release "-DCMAKE_OSX_ARCHITECTURES=arm64;x86_64"
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release "-DCMAKE_OSX_ARCHITECTURES=arm64;x86_64" -DJUCE_VST3_SDK_DIR=${{ github.workspace }}/vst3sdk
 
       - name: Build
         run: cmake --build build --config Release -j 3
@@ -45,8 +59,24 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Prepare Steinberg VST3 SDK (with submodules + vst2.x)
+        shell: pwsh
+        run: |
+          if (-not (Test-Path 'vst3sdk\pluginterfaces\vst2.x\vstfxstore.h')) {
+            Remove-Item -Recurse -Force vst3sdk -ErrorAction SilentlyContinue
+            git clone --depth 1 --recursive --branch v3.7.4_build_25 `
+              https://github.com/steinbergmedia/vst3sdk.git vst3sdk
+          }
+          if (Test-Path 'vst3sdk\pluginterfaces\vst2.x\vstfxstore.h') {
+            Write-Host 'SDK OK: vstfxstore.h present'
+          } else {
+            Write-Host 'SDK BROKEN:'
+            Get-ChildItem vst3sdk\pluginterfaces -ErrorAction SilentlyContinue
+            exit 1
+          }
+
       - name: Configure
-        run: cmake -S . -B build -A x64 -DCMAKE_BUILD_TYPE=Release
+        run: cmake -S . -B build -A x64 -DCMAKE_BUILD_TYPE=Release -DJUCE_VST3_SDK_DIR=${{ github.workspace }}\vst3sdk
 
       - name: Build
         run: cmake --build build --config Release -j 2

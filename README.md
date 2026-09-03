@@ -37,9 +37,13 @@
 5. 重启 DAW，效果器列表搜 "PitchLab"。
 
 ## 本地构建（改代码时）
-需要 CMake ≥3.22 与 Xcode / Visual Studio。
+需要 CMake ≥3.22 与 Xcode / Visual Studio。VST3 目标需要 Steinberg VST3 SDK
+（含 `pluginterfaces/vst2.x`，v3.7.4 及更早版本含此目录）：
 ```bash
-cmake -S . -B build        # macOS: 加 -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64"
+git clone --depth 1 --recursive --branch v3.7.4_build_25 \
+    https://github.com/steinbergmedia/vst3sdk.git vst3sdk
+cmake -S . -B build -DJUCE_VST3_SDK_DIR=$PWD/vst3sdk
+# macOS: 另加 -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64"
 cmake --build build --config Release -j
 # 产物在 build/PitchLab_artefacts/Release/{VST3,AU}/
 ```

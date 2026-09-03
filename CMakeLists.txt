@@ -21,21 +21,11 @@ if(APPLE)
     list(APPEND PITCHLAB_FORMATS AU)
 endif()
 
-# ------- VST3 需要 Steinberg VST3 SDK(含 juce VST3 客户端引用的 vst2.x 旧头) -------
-# 注意：只 Populate(取头文件)，绝不 MakeAvailable——SDK 自带的老式 CMake 会
-# 与新版 CMake 冲突(还需构建 vstgui 等无关库)。JUCE 仅需要它的头文件路径。
+# VST3 需要 Steinberg VST3 SDK：CI 在 workflow 里显式克隆(--recursive，含
+# pluginterfaces/vst2.x 旧头)并自检；本地构建请用 -DJUCE_VST3_SDK_DIR=<sdk路径>
 if(NOT JUCE_VST3_SDK_DIR)
-    message(STATUS "PitchLab: fetching Steinberg VST3 SDK sources (JUCE_VST3_SDK_DIR not set)")
-    FetchContent_Declare(steinberg_vst3_sdk
-        GIT_REPOSITORY https://github.com/steinbergmedia/vst3sdk.git
-        GIT_TAG        v3.7.4_build_25
-        GIT_SHALLOW    TRUE
-        GIT_SUBMODULES_RECURSE TRUE)   # pluginterfaces / public.sdk 是子模块，必须递归
-    if(NOT steinberg_vst3_sdk_POPULATED)
-        FetchContent_Populate(steinberg_vst3_sdk)
-    endif()
-    set(JUCE_VST3_SDK_DIR "${steinberg_vst3_sdk_SOURCE_DIR}"
-        CACHE PATH "Steinberg VST3 SDK location" FORCE)
+    message(WARNING "JUCE_VST3_SDK_DIR not set — VST3 目标将无法编译。"
+                    "CI 中由 workflow 提供；本地请 -DJUCE_VST3_SDK_DIR=...")
 endif()
 
 juce_add_plugin(PitchLab
