@@ -1,5 +1,6 @@
 // PitchLab DSP 自测：验证 YIN 精度与选区分析(与 Python 原型同标准)。
 // 编译: c++ -std=c++17 -O2 -I Source tests/dsp_test.cpp -o dsp_test
+#define _USE_MATH_DEFINES   // MSVC 需要，使 <cmath> 提供 M_PI
 #include <cmath>
 #include <cstdio>
 #include <vector>
