@@ -49,11 +49,15 @@ target_sources(PitchLab PRIVATE
     Source/PluginEditor.cpp)
 target_include_directories(PitchLab PRIVATE Source)
 
-# 只发布 VST3/AU、不发布 VST2：关闭 VST3 对 VST2 的兼容检查，
-# 否则 JUCE8 的 VST3 客户端会 #error 参数自动化冲突(见其注释)。
-if(TARGET PitchLab_SharedCode)
-    target_compile_definitions(PitchLab_SharedCode PUBLIC JUCE_VST3_CAN_REPLACE_VST2=0)
-endif()
+# 只发布 VST3/AU、不发布 VST2：按 JUCE8 注释，为 VST3-only 插件启用该宏，
+# 关闭 VST2/VST3 参数自动化冲突的 #error。必须同时作用于格式目标(PitchLab_VST3/AU)
+# 与共享代码目标，仅设 SharedCode 会被 JUCE 在格式目标上的 =1 覆盖。
+foreach(_t PitchLab PitchLab_SharedCode PitchLab_VST3 PitchLab_AU)
+    if(TARGET ${_t})
+        target_compile_definitions(${_t} PRIVATE
+            JUCE_IGNORE_VST3_MISMATCHED_PARAMETER_ID_WARNING=1)
+    endif()
+endforeach()
 
 # ------- 核心 DSP 单元测试(不依赖 JUCE，本地即可跑) -------
 add_executable(dsp_test tests/dsp_test.cpp)
