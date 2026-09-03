@@ -22,13 +22,17 @@ if(APPLE)
 endif()
 
 # ------- VST3 需要 Steinberg VST3 SDK(含 juce VST3 客户端引用的 vst2.x 旧头) -------
+# 注意：只 Populate(取头文件)，绝不 MakeAvailable——SDK 自带的老式 CMake 会
+# 与新版 CMake 冲突(还需构建 vstgui 等无关库)。JUCE 仅需要它的头文件路径。
 if(NOT JUCE_VST3_SDK_DIR)
-    message(STATUS "PitchLab: fetching Steinberg VST3 SDK (JUCE_VST3_SDK_DIR not set)")
+    message(STATUS "PitchLab: fetching Steinberg VST3 SDK sources (JUCE_VST3_SDK_DIR not set)")
     FetchContent_Declare(steinberg_vst3_sdk
         GIT_REPOSITORY https://github.com/steinbergmedia/vst3sdk.git
         GIT_TAG        v3.7.8_build_34
         GIT_SHALLOW    TRUE)
-    FetchContent_MakeAvailable(steinberg_vst3_sdk)
+    if(NOT steinberg_vst3_sdk_POPULATED)
+        FetchContent_Populate(steinberg_vst3_sdk)
+    endif()
     set(JUCE_VST3_SDK_DIR "${steinberg_vst3_sdk_SOURCE_DIR}"
         CACHE PATH "Steinberg VST3 SDK location" FORCE)
 endif()
