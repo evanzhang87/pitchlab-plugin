@@ -37,10 +37,11 @@ inline std::string fmtF(double v, int prec) {
     return std::string(b);
 }
 
-// 窗口 9 中值平滑 + 八度归位(仅对一段连续 voiced 的 midi 值)。
-// 八度归位：把"同一音高类别、却整八度跳置"的瞬间毛刺(检测器偶发的 2x/0.5x
-// 频锁)，折叠回本句的主导八度——既消掉超高/超低尖刺，又保留揉弦/推弦形状。
-std::vector<double> smoothRun(std::vector<double> mv) {
+// 中值平滑 + 八度归位(对一段连续 voiced 的 midi 值)。
+// baseline 为"全局稳健八度基线"(窗口内所有有声帧的中位音高)：
+// 把"同一音高类别却整八度跳置"的毛刺折叠回基线八度——对独立成句的
+// 短尖刺同样生效(它们不再因"本句中值就是尖刺"而漏网)。|rel|<3 视为同音高类别。
+std::vector<double> smoothRun(const std::vector<double>& mv, double baseline) {
     const size_t n = mv.size();
     const int hw = 4;                                // 窗口 9
     std::vector<double> out(n);
@@ -51,15 +52,12 @@ std::vector<double> smoothRun(std::vector<double> mv) {
         std::sort(w.begin(), w.end());
         out[i] = w[w.size() / 2];
     }
-    // 主导八度 = 平滑序列的中值
-    std::vector<double> tmp = out;
-    std::sort(tmp.begin(), tmp.end());
-    double runOc = tmp[tmp.size() / 2];
-    // 八度归位：仅折叠"同一音高类别(|rel|<2 半音)"的整八度毛刺
-    for (size_t i = 0; i < n; ++i) {
-        double rel = out[i] - 12.0 * std::lround((out[i] - runOc) / 12.0);
-        if (std::fabs(rel) < 2.0)
-            out[i] = runOc + rel;
+    if (baseline > -1e8) {
+        for (size_t i = 0; i < n; ++i) {
+            double rel = out[i] - 12.0 * std::lround((out[i] - baseline) / 12.0);
+            if (std::fabs(rel) < 3.0)
+                out[i] = baseline + rel;
+        }
     }
     return out;
 }
@@ -160,7 +158,7 @@ void PitchLabAudioProcessorEditor::refreshSnapshot() {
         tHi = mx + pad;
         double span = tHi - tLo;
         if (span < 6.0) { double mid = (tLo + tHi) / 2.0; tLo = mid - 3.0; tHi = mid + 3.0; }
-        if (span > 30.0) { double mid = (tLo + tHi) / 2.0; tLo = mid - 15.0; tHi = mid + 15.0; }
+        if (span > 36.0) { double mid = (tLo + tHi) / 2.0; tLo = mid - 18.0; tHi = mid + 18.0; }
     } else if (!paused_) {
         tLo = 45.0; tHi = 57.0;
     } else {
@@ -377,6 +375,19 @@ void PitchLabAudioProcessorEditor::paintRibbons(juce::Graphics& g) {
         if (xa > p.x + p.w && xb > p.x + p.w) return;
         paths[col].addLineSegment(juce::Line<float>(xa, ya, xb, yb), 1.0f);
     };
+    // 全局稳健八度基线 = 当前窗口内所有有声帧的中位音高(不被个别尖刺拖偏)
+    double baseline = -1e9;
+    {
+        std::vector<double> all;
+        for (size_t k = 0; k < n; ++k)
+            if (f_[k] > 0.0f && t_[k] >= x0_ && t_[k] <= x1_)
+                all.push_back(pitchlab::midiFromFreq(f_[k]));
+        if (!all.empty()) {
+            std::sort(all.begin(), all.end());
+            baseline = all[all.size() / 2];
+        }
+    }
+
     while (i < n) {
         if (f_[i] <= 0.0f) { ++i; continue; }
         size_t j = i;
@@ -385,7 +396,7 @@ void PitchLabAudioProcessorEditor::paintRibbons(juce::Graphics& g) {
         std::vector<double> mv;
         mv.reserve(j - i);
         for (size_t k = i; k < j; ++k) mv.push_back(pitchlab::midiFromFreq(f_[k]));
-        auto sm = smoothRun(mv);
+        auto sm = smoothRun(mv, baseline);
         for (size_t k = i; k + 1 < j; ++k) {
             double c0 = (sm[k - i] - std::round(sm[k - i])) * 100.0;
             int col = std::fabs(c0) <= 12.0 ? 0 : (std::fabs(c0) <= 40.0 ? 1 : 2);
