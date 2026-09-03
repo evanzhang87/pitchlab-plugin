@@ -1,0 +1,64 @@
+name: build
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  macos:
+    name: macOS (VST3 + AU, universal)
+    runs-on: macos-13
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release "-DCMAKE_OSX_ARCHITECTURES=arm64;x86_64"
+
+      - name: Build
+        run: cmake --build build --config Release -j 3
+
+      - name: Core DSP test
+        run: ctest --test-dir build --output-on-failure
+
+      - name: Ad-hoc sign (local use, no notarization)
+        run: |
+          codesign --force --deep -s - build/PitchLab_artefacts/Release/VST3/PitchLab.vst3 || true
+          codesign --force --deep -s - build/PitchLab_artefacts/Release/AU/PitchLab.component || true
+
+      - name: Package
+        run: |
+          cd build/PitchLab_artefacts/Release
+          zip -r PitchLab-macOS-universal.zip VST3 AU
+          ls -la
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PitchLab-macOS-universal
+          path: build/PitchLab_artefacts/Release/PitchLab-macOS-universal.zip
+
+  windows:
+    name: Windows (VST3 x64)
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        run: cmake -S . -B build -A x64 -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build --config Release -j 2
+
+      - name: Core DSP test
+        run: ctest --test-dir build -C Release --output-on-failure
+
+      - name: Package
+        shell: pwsh
+        run: |
+          Compress-Archive -Path build\PitchLab_artefacts\Release\VST3 -DestinationPath PitchLab-Windows-x64.zip
+          Get-ChildItem -Recurse build\PitchLab_artefacts\Release
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PitchLab-Windows-x64
+          path: PitchLab-Windows-x64.zip
