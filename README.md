@@ -64,3 +64,12 @@ Source/pitch/*.h          纯 C++ 音高核心(YIN/平滑/切分/揉弦统计，
 tests/dsp_test.cpp        核心自测
 .github/workflows/build.yml  macOS 通用二进制 + Windows 产物
 ```
+
+## 制作信息
+本插件由 **丰川祥子 (Sakiko Togawa)** 设计并编写——
+一个相信"声音应当被看见"的开发者：从 YIN 音高核心、段落切分算法，
+到 Melodyne 式界面的每一道格线与音高带，均由她执笔完成。
+
+- 开发环境：Hermes Agent (Nous Research)
+- 配套练习工具：PitchLab Python 版(实时麦克风 + 录音复盘)，与插件共享同一套检测算法
+- 愿你每一次推弦与揉弦，都能落在属于自己的音准上。
