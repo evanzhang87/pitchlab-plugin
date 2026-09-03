@@ -37,6 +37,8 @@ public:
 
     bool isBusesLayoutSupported(const BusesLayout& layouts) const override;
     void parameterChanged(const juce::String&, float) override;
+    void getStateInformation(juce::MemoryBlock& destData) override;
+    void setStateInformation(const void* data, int sizeInBytes) override;
 
     juce::AudioProcessorValueTreeState apvts;
 
@@ -49,7 +51,7 @@ public:
     void clearHistory();
 
 private:
-    std::unique_ptr<juce::AudioProcessorValueTreeState::ParameterLayout> createParameterLayout();
+    juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
 
     std::mutex mu_;
     pitchlab::PitchDetector det_;

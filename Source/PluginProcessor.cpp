@@ -1,6 +1,8 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
 
+#include <juce_core/juce_core.h>
+
 #include <cmath>
 
 namespace {
@@ -11,19 +13,33 @@ PitchLabAudioProcessor::PitchLabAudioProcessor()
     : AudioProcessor(BusesProperties()
                          .withInput("Input", juce::AudioChannelSet::stereo(), true)
                          .withOutput("Output", juce::AudioChannelSet::stereo(), true)),
-      apvts(*this, nullptr, "PitchLab", *createParameterLayout()) {
+      apvts(*this, nullptr, "PitchLab", createParameterLayout()) {
     apvts.addParameterListener("gate", this);
 }
 
-std::unique_ptr<juce::AudioProcessorValueTreeState::ParameterLayout>
+juce::AudioProcessorValueTreeState::ParameterLayout
 PitchLabAudioProcessor::createParameterLayout() {
-    auto layout = std::make_unique<juce::AudioProcessorValueTreeState::ParameterLayout>();
-    layout->add(std::make_unique<juce::AudioParameterFloat>(
+    juce::AudioProcessorValueTreeState::ParameterLayout layout;
+    layout.add(std::make_unique<juce::AudioParameterFloat>(
         "gate", "静音门限 (dB)", juce::NormalisableRange<float>(-70.0f, -30.0f, 0.1f), -55.0f));
     return layout;
 }
 
 void PitchLabAudioProcessor::parameterChanged(const juce::String&, float) {}
+
+void PitchLabAudioProcessor::getStateInformation(juce::MemoryBlock& destData) {
+    auto state = apvts.copyState();
+    std::unique_ptr<juce::XmlElement> xml(state.createXml());
+    juce::String text = xml->toString();
+    destData.append(text.toRawUTF8(), text.getNumBytesAsUTF8());
+}
+
+void PitchLabAudioProcessor::setStateInformation(const void* data, int sizeInBytes) {
+    juce::String text(static_cast<const char*>(data), sizeInBytes);
+    auto xml = juce::XmlDocument::parse(text);
+    if (xml != nullptr && xml->hasTagName(apvts.state.getType()))
+        apvts.replaceState(juce::ValueTree::fromXml(*xml));
+}
 
 void PitchLabAudioProcessor::prepareToPlay(double sampleRate, int /*samplesPerBlock*/) {
     lastSr_ = sampleRate;
