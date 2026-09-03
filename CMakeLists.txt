@@ -28,8 +28,9 @@ if(NOT JUCE_VST3_SDK_DIR)
     message(STATUS "PitchLab: fetching Steinberg VST3 SDK sources (JUCE_VST3_SDK_DIR not set)")
     FetchContent_Declare(steinberg_vst3_sdk
         GIT_REPOSITORY https://github.com/steinbergmedia/vst3sdk.git
-        GIT_TAG        v3.7.8_build_34
-        GIT_SHALLOW    TRUE)
+        GIT_TAG        v3.7.4_build_25
+        GIT_SHALLOW    TRUE
+        GIT_SUBMODULES_RECURSE TRUE)   # pluginterfaces / public.sdk 是子模块，必须递归
     if(NOT steinberg_vst3_sdk_POPULATED)
         FetchContent_Populate(steinberg_vst3_sdk)
     endif()
