@@ -119,6 +119,8 @@ public:
     // 置信度门限：cmndf 谷底深度(0=极周期，1=纯噪声)。谷底太浅视为无声，
     // 避免把底噪/空音误判成超低音。默认 0.25。
     void setConfidenceThresh(double c) { confThresh_ = c; }
+    void reset() { pending_.clear(); out_.clear(); }   // 清空缓冲，不重置时间
+    void setTime(double t) { t_ = t; }                 // 对齐外部(宿主)时间
     double timeNow() const { return t_; }
 
     // 追加一段单声道音频（实时回调里调用；内部无分配：pending_ 已预留）

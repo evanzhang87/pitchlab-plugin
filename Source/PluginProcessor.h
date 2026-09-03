@@ -43,9 +43,18 @@ public:
     juce::AudioProcessorValueTreeState apvts;
 
     struct Snapshot {
-        std::vector<double> t;   // 秒
+        std::vector<double> t;   // 秒(宿主时间，若可用)
         std::vector<double> f;   // Hz, <=0 无声
         double sampleRate = 0.0;
+        // 宿主播放头(传输同步)
+        bool hasHost = false;
+        bool hostPlaying = false;
+        double hostTime = 0.0;          // 宿主时间(秒)
+        juce::int64 hostBar = 0;        // 当前小节
+        double hostBpm = 120.0;
+        int hostNum = 4, hostDenom = 4;
+        double hostPpq = 0.0;           // 当前四分音符位置
+        double hostLastBarStartPpq = 0.0;
     };
     Snapshot grabSnapshot();
     void clearHistory();
@@ -60,4 +69,13 @@ private:
     float lastGateDb_ = -55.0f;
     std::atomic<bool> silent_ { true };
     static constexpr size_t kMaxHist = 24000; // ≈4.6 分钟 @86Hz
+
+    // 宿主播放头状态(音频线程写入)
+    bool hasHost_ = false;
+    bool hostPlaying_ = false;
+    double hostTimeSec_ = 0.0, hostBpm_ = 120.0;
+    double hostPpq_ = 0.0, hostLastBarStartPpq_ = 0.0;
+    juce::int64 hostBar_ = 0;
+    int hostNum_ = 4, hostDenom_ = 4;
+    double lastHostTimeSec_ = -1.0;      // 用于检测 seek 跳变
 };

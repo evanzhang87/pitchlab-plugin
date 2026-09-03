@@ -74,6 +74,14 @@ private:
     std::vector<pitchlab::NoteStat> analysis_; // 选区分析结果
     double analysisT0_ = 0.0, analysisT1_ = 0.0;
 
+    // 宿主播放头(传输同步)
+    bool hasHost_ = false;
+    bool hostPlaying_ = false;
+    double hostTime_ = 0.0, hostBpm_ = 120.0;
+    double hostPpq_ = 0.0, hostLastBarStartPpq_ = 0.0;
+    juce::int64 hostBar_ = 0;
+    int hostNum_ = 4, hostDenom_ = 4;
+
     // 实时 HUD
     double liveNoteMidi_ = -1.0;
     double liveCents_ = 0.0;

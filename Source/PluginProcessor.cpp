@@ -79,21 +79,53 @@ void PitchLabAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
         }
     }
 
-    // 直通（buffer 本身即输入输出）
-    // 取第 1 声道送入检测器（立体声吉他轨两声道相同；若不同则建议用单声道轨）
-    if (buffer.getNumChannels() > 0 && n > 0)
-        det_.process(buffer.getReadPointer(0), n);
+    // 读取宿主播放头：传输状态 + 时间线(秒/小节/拍号/BPM)
+    bool play = true;
+    double hostStamp = -1.0;    // <0 => 无宿主时间，用内部时钟
+    if (auto* ph = getPlayHead()) {
+        if (auto pos = ph->getPosition()) {
+            hasHost_ = true;
+            hostPlaying_ = pos->getIsPlaying() || pos->getIsRecording();
+            if (auto v = pos->getTimeInSeconds())      hostTimeSec_ = *v;
+            if (auto v = pos->getBarCount())           hostBar_ = *v;
+            if (auto v = pos->getBpm())                hostBpm_ = *v;
+            if (auto v = pos->getPpqPosition())        hostPpq_ = *v;
+            if (auto v = pos->getPpqPositionOfLastBarStart()) hostLastBarStartPpq_ = *v;
+            if (auto v = pos->getTimeSignature()) { hostNum_ = v->numerator; hostDenom_ = v->denominator; }
+            play = hostPlaying_;
+            hostStamp = hostTimeSec_;
+            // 定位跳变(seek / 循环跳回)：清空历史，避免新旧时间混在一起
+            if (hostPlaying_ && lastHostTimeSec_ >= 0.0
+                && std::fabs(hostTimeSec_ - lastHostTimeSec_) > 1.0) {
+                std::lock_guard<std::mutex> lk(mu_);
+                hist_.clear();
+            }
+            lastHostTimeSec_ = hostTimeSec_;
+        } else {
+            hasHost_ = false;
+            play = true;
+        }
+    } else {
+        hasHost_ = false;
+        play = true;
+    }
 
+    // 只在宿主播放/录音时喂检测器；停止时清空缓冲(时间轴随宿主走，不空转)
     bool anyVoice = false;
-    {
+    if (play) {
+        if (buffer.getNumChannels() > 0 && n > 0)
+            det_.process(buffer.getReadPointer(0), n);
         std::lock_guard<std::mutex> lk(mu_);
         auto outs = det_.take();
         for (auto& d : outs) {
             if (d.freq > 0.0f) anyVoice = true;
+            if (hostStamp >= 0.0) d.time = hostStamp;   // 用宿主时间打时间戳
             hist_.push_back(d);
         }
         while (hist_.size() > kMaxHist)
             hist_.pop_front();
+    } else {
+        det_.reset();
     }
     silent_.store(!anyVoice, std::memory_order_relaxed);
 }
@@ -101,6 +133,15 @@ void PitchLabAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
 PitchLabAudioProcessor::Snapshot PitchLabAudioProcessor::grabSnapshot() {
     Snapshot s;
     s.sampleRate = lastSr_;
+    s.hasHost = hasHost_;
+    s.hostPlaying = hostPlaying_;
+    s.hostTime = hostTimeSec_;
+    s.hostBar = hostBar_;
+    s.hostBpm = hostBpm_;
+    s.hostNum = hostNum_;
+    s.hostDenom = hostDenom_;
+    s.hostPpq = hostPpq_;
+    s.hostLastBarStartPpq = hostLastBarStartPpq_;
     {
         std::lock_guard<std::mutex> lk(mu_);
         s.t.reserve(hist_.size());

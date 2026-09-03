@@ -102,14 +102,30 @@ void PitchLabAudioProcessorEditor::refreshSnapshot() {
     auto s = proc_.grabSnapshot();
     t_.swap(s.t);
     f_.swap(s.f);
+    hasHost_ = s.hasHost;
+    hostPlaying_ = s.hostPlaying;
+    hostTime_ = s.hostTime;
+    hostBar_ = s.hostBar;
+    hostBpm_ = s.hostBpm;
+    hostPpq_ = s.hostPpq;
+    hostLastBarStartPpq_ = s.hostLastBarStartPpq;
+    hostNum_ = s.hostNum;
+    hostDenom_ = s.hostDenom;
     if (t_.size() > 1) dt_ = t_[1] - t_[0];
     tEnd_ = t_.empty() ? 0.0 : t_.back();
 
-    if (paused_)
-        x1_ = pauseT_ + 0.15;         // 视图冻结
-    else
-        x1_ = std::max(tEnd_ + 0.15, 1.0);
-    x0_ = std::max(0.0, x1_ - 10.0);
+    // x 窗口：只在「手动未暂停」且「(无宿主 或 宿主正在播放/录音)」时滚动；
+    // 宿主停止时冻结(等价于暂停)，时间轴与宿主走带同步。
+    bool scroll = (!paused_) && (!hasHost_ || hostPlaying_);
+    double anchor = hasHost_ ? hostTime_ : (t_.empty() ? 0.0 : t_.back());
+    if (scroll) {
+        x1_ = std::max(anchor + 0.15, 1.0);
+        x0_ = std::max(0.0, x1_ - 10.0);
+    } else if (paused_) {
+        x1_ = pauseT_ + 0.15;
+        x0_ = std::max(0.0, x1_ - 10.0);
+    }
+    // 宿主停止：保持当前 x0_/x1_ 不动(冻结)
 
     // y 范围：取当前窗口内有声部分，并做"迟滞自动缩放"——
     //   内容超出当前范围时立即扩窗(保证不裁切)，收窄时缓慢收缩(画面不抖)。
@@ -308,6 +324,29 @@ void PitchLabAudioProcessorEditor::paintGrid(juce::Graphics& g) {
         g.drawText(juce::String(s), px - 15, p.y + p.h - 12, 30, 11,
                    juce::Justification::centred);
     }
+
+    // 小节刻度：与宿主时间轴同步(仅当宿主提供播放头 + BPM 时)
+    if (hasHost_ && hostBpm_ > 1.0 && hostNum_ > 0 && hostDenom_ > 0) {
+        double spb = 60.0 / hostBpm_;                          // 秒/拍
+        double beatsPerBar = hostNum_ * 4.0 / (double)hostDenom_;
+        double barDur = spb * beatsPerBar;
+        if (barDur > 0.05) {
+            double ppqInBar = hostPpq_ - hostLastBarStartPpq_; // 当前小节内经过的拍数
+            double curBarStartTime = hostTime_ - ppqInBar * spb;
+            g.setFont(juce::Font(8.5f).boldened());
+            for (juce::int64 b = hostBar_ - 24; b <= hostBar_ + 1; ++b) {
+                double bt = curBarStartTime + (double)(b - hostBar_) * barDur;
+                if (bt < x0_ || bt > x1_) continue;
+                float px = xToPx(bt);
+                if (px < p.x + 8 || px > p.x + p.w - 8) continue;
+                g.setColour(GRID_HI.withAlpha(0.7f));
+                g.drawVerticalLine((int)px, p.y, p.y + p.h - 16);
+                g.setColour(LABEL.withAlpha(0.85f));
+                g.drawText(juce::String(b), px - 12, p.y + p.h - 15, 30, 12,
+                           juce::Justification::centredLeft);
+            }
+        }
+    }
 }
 
 void PitchLabAudioProcessorEditor::paintRibbons(juce::Graphics& g) {
@@ -419,7 +458,10 @@ void PitchLabAudioProcessorEditor::paintHud(juce::Graphics& g) {
                juce::Justification::centredLeft);
     g.setColour(DIMMED);
     g.setFont(juce::Font(10.5f));
-    juce::String sub = paused_ ? "PAUSED" : "LIVE";
+    juce::String sub = paused_ ? "PAUSED"
+                      : (hasHost_ ? (hostPlaying_ ? "LIVE" : "STOPPED") : "LIVE");
+    if (hasHost_ && hostBpm_ > 1.0)
+        sub << "  ·  bar " << (juce::int64)hostBar_ << "  " << (int)std::lround(hostBpm_) << "bpm";
     if (selA_ >= 0 && selB_ >= 0)
         sub << "  ·  sel " << juce::String(std::min(selA_, selB_), 2) << "-"
             << juce::String(std::max(selA_, selB_), 2) << "s";
