@@ -14,15 +14,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Prepare Steinberg VST3 SDK (with submodules + vst2.x)
+      - name: Prepare Steinberg VST3 SDK (with submodules)
         run: |
-          if [ ! -f vst3sdk/pluginterfaces/vst2.x/vstfxstore.h ]; then
+          if [ ! -f vst3sdk/pluginterfaces/vst/ivstaudioprocessor.h ]; then
             rm -rf vst3sdk
             git clone --depth 1 --recursive --branch v3.7.4_build_25 \
               https://github.com/steinbergmedia/vst3sdk.git vst3sdk
           fi
-          if [ -f vst3sdk/pluginterfaces/vst2.x/vstfxstore.h ]; then
-            echo "SDK OK: vstfxstore.h present"
+          if [ -f vst3sdk/pluginterfaces/vst/ivstaudioprocessor.h ]; then
+            echo "SDK OK: vst3 headers present"
           else
             echo "SDK BROKEN:"; ls vst3sdk/pluginterfaces 2>&1 || true
             exit 1
@@ -59,16 +59,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Prepare Steinberg VST3 SDK (with submodules + vst2.x)
+      - name: Prepare Steinberg VST3 SDK (with submodules)
         shell: pwsh
         run: |
-          if (-not (Test-Path 'vst3sdk\pluginterfaces\vst2.x\vstfxstore.h')) {
+          if (-not (Test-Path 'vst3sdk\pluginterfaces\vst\ivstaudioprocessor.h')) {
             Remove-Item -Recurse -Force vst3sdk -ErrorAction SilentlyContinue
             git clone --depth 1 --recursive --branch v3.7.4_build_25 `
               https://github.com/steinbergmedia/vst3sdk.git vst3sdk
           }
-          if (Test-Path 'vst3sdk\pluginterfaces\vst2.x\vstfxstore.h') {
-            Write-Host 'SDK OK: vstfxstore.h present'
+          if (Test-Path 'vst3sdk\pluginterfaces\vst\ivstaudioprocessor.h') {
+            Write-Host 'SDK OK: vst3 headers present'
           } else {
             Write-Host 'SDK BROKEN:'
             Get-ChildItem vst3sdk\pluginterfaces -ErrorAction SilentlyContinue

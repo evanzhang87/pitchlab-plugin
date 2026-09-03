@@ -37,8 +37,8 @@
 5. 重启 DAW，效果器列表搜 "PitchLab"。
 
 ## 本地构建（改代码时）
-需要 CMake ≥3.22 与 Xcode / Visual Studio。VST3 目标需要 Steinberg VST3 SDK
-（含 `pluginterfaces/vst2.x`，v3.7.4 及更早版本含此目录）：
+需要 CMake ≥3.22 与 Xcode / Visual Studio。VST3 目标需要 Steinberg VST3 SDK 头文件
+（JUCE 8 不再需要已绝版的 `vst2.x` 旧头，现代 vst3 头即可）：
 ```bash
 git clone --depth 1 --recursive --branch v3.7.4_build_25 \
     https://github.com/steinbergmedia/vst3sdk.git vst3sdk

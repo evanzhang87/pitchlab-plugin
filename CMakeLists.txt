@@ -8,10 +8,11 @@ if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
 endif()
 
 # ------- JUCE (FetchContent，无需手动安装) -------
+# JUCE 8.0.15: VST3 客户端已移除对 pluginterfaces/vst2.x 旧头(已绝版)的依赖
 include(FetchContent)
 FetchContent_Declare(JUCE
     GIT_REPOSITORY https://github.com/juce-framework/JUCE.git
-    GIT_TAG        7.0.12
+    GIT_TAG        8.0.15
     GIT_SHALLOW    TRUE)
 FetchContent_MakeAvailable(JUCE)
 
