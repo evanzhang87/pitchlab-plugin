@@ -486,6 +486,8 @@ void PitchLabAudioProcessorEditor::paintHud(juce::Graphics& g) {
                       : (hasHost_ ? (hostPlaying_ ? "PLAYING" : "STOPPED") : "NO-HOST");
     if (hasHost_ && hostBpm_ > 1.0)
         sub << "  ·  bar " << (juce::int64)hostBar_ << "  " << (int)std::lround(hostBpm_) << "bpm";
+    if (hasHost_)
+        sub << "  ·  t=" << juce::String(hostTime_, 1) << "s";
     if (selA_ >= 0 && selB_ >= 0)
         sub << "  ·  sel " << juce::String(std::min(selA_, selB_), 2) << "-"
             << juce::String(std::max(selA_, selB_), 2) << "s";
@@ -493,6 +495,22 @@ void PitchLabAudioProcessorEditor::paintHud(juce::Graphics& g) {
         sub << "  ·  analyzed " << (int)analysis_.size() << " note(s)";
     g.drawText(sub, juce::Rectangle<float>(p.x + 8, p.y + 28, p.w - 250, 13),
                juce::Justification::centredLeft);
+
+    // 状态徽章(醒目，便于诊断)：绿=播放 琥珀=停止 灰=无宿主
+    juce::String state;
+    juce::Colour sc;
+    if (paused_) { state = "PAUSED";  sc = WARN; }
+    else if (!hasHost_) { state = "NO-HOST"; sc = DIMMED; }
+    else if (hostPlaying_) { state = "PLAYING"; sc = GOOD; }
+    else { state = "STOPPED"; sc = WARN; }
+    float bw = (float)state.length() * 8.0f + 18.0f;
+    juce::Rectangle<float> bg(p.x + p.w - bw - 6, p.y + 6, bw, 20);
+    g.setColour(sc.withAlpha(0.16f));
+    g.fillRoundedRectangle(bg, 4.0f);
+    g.setColour(sc);
+    g.drawRoundedRectangle(bg, 4.0f, 1.0f);
+    g.setFont(juce::Font(12.0f).boldened());
+    g.drawText(state, bg, juce::Justification::centred);
 }
 
 void PitchLabAudioProcessorEditor::paintGauge(juce::Graphics& g) {
