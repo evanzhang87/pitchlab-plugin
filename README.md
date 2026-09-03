@@ -36,6 +36,16 @@
    - Windows 若 SmartScreen 拦截：右键 → 属性 → 解除锁定。
 5. 重启 DAW，效果器列表搜 "PitchLab"。
 
+## 一键更新 (macOS)
+CI 会自动把每次构建发布为滚动 Release(`latest`)。在你的 Mac 上：
+```bash
+./update-pitchlab.sh
+```
+它会自动：下载最新 → 解开(含可能的嵌套 zip) → `lipo` 校验 arm64+x86_64 →
+去隔离 + 重新本地签名 → 备份旧版并安装到 `~/Library/Audio/Plug-Ins/{VST3,Components}`。
+若仓库还没生成 Release，脚本会回退用 `gh run download` 拉最新 Actions 产物
+(需 `brew install gh && gh auth login`)。
+
 ## 本地构建（改代码时）
 需要 CMake ≥3.22 与 Xcode / Visual Studio。VST3 目标需要 Steinberg VST3 SDK 头文件
 （JUCE 8 不再需要已绝版的 `vst2.x` 旧头，现代 vst3 头即可）：

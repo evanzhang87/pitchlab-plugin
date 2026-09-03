@@ -48,6 +48,24 @@ jobs:
           ls -la build/PitchLab_artefacts/Release/VST3
           ls -la build/PitchLab_artefacts/Release/AU
 
+      # 供"一键更新脚本"用的干净 zip(顶层含 VST3/ 与 AU/)
+      - name: Package clean zip (release)
+        run: |
+          cd build/PitchLab_artefacts/Release
+          rm -f PitchLab-macOS-universal.zip
+          zip -r PitchLab-macOS-universal.zip VST3 AU
+
+      # 发布/更新滚动 Release(latest)，供公开免 token 下载；失败不打断构建
+      - name: Publish rolling release
+        continue-on-error: true
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: PitchLab (latest)
+          body: 'Rolling build (VST3 + AU, universal). One-click update: ./update-pitchlab.sh'
+          files: build/PitchLab_artefacts/Release/PitchLab-macOS-universal.zip
+          overwrite_files: true
+
       # upload-artifact@v4 会自动再包一层 zip，所以这里直接上传目录，
       # 避免出现"解压后还是同名 zip"的双层压缩。
       - uses: actions/upload-artifact@v4
@@ -92,6 +110,23 @@ jobs:
         shell: pwsh
         run: |
           Get-ChildItem -Recurse build\PitchLab_artefacts\Release
+
+      # 供"一键更新"用的干净 zip
+      - name: Package clean zip (release)
+        shell: pwsh
+        run: |
+          if (Test-Path PitchLab-Windows-x64.zip) { Remove-Item PitchLab-Windows-x64.zip }
+          Compress-Archive -Path build\PitchLab_artefacts\Release\VST3 -DestinationPath PitchLab-Windows-x64.zip
+
+      - name: Publish rolling release
+        continue-on-error: true
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: PitchLab (latest)
+          body: 'Rolling build (VST3 x64). One-click update: ./update-pitchlab.sh'
+          files: PitchLab-Windows-x64.zip
+          overwrite_files: true
 
       # 直接上传目录，upload-artifact 会自动打包一层 zip
       - uses: actions/upload-artifact@v4
