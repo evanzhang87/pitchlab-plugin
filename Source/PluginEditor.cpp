@@ -37,16 +37,29 @@ inline std::string fmtF(double v, int prec) {
     return std::string(b);
 }
 
-// 窗口 7 中值平滑(仅对一段连续 voiced 的 midi 值)
-std::vector<double> smoothRun(const std::vector<double>& mv) {
+// 窗口 9 中值平滑 + 八度归位(仅对一段连续 voiced 的 midi 值)。
+// 八度归位：把"同一音高类别、却整八度跳置"的瞬间毛刺(检测器偶发的 2x/0.5x
+// 频锁)，折叠回本句的主导八度——既消掉超高/超低尖刺，又保留揉弦/推弦形状。
+std::vector<double> smoothRun(std::vector<double> mv) {
     const size_t n = mv.size();
+    const int hw = 4;                                // 窗口 9
     std::vector<double> out(n);
     for (size_t i = 0; i < n; ++i) {
-        size_t a = (size_t)std::max(0, (int)i - 3);
-        size_t b = std::min(n, i + 4);
+        size_t a = (size_t)std::max(0, (int)i - hw);
+        size_t b = std::min(n, i + hw + 1);
         std::vector<double> w(mv.begin() + (long)a, mv.begin() + (long)b);
         std::sort(w.begin(), w.end());
         out[i] = w[w.size() / 2];
+    }
+    // 主导八度 = 平滑序列的中值
+    std::vector<double> tmp = out;
+    std::sort(tmp.begin(), tmp.end());
+    double runOc = tmp[tmp.size() / 2];
+    // 八度归位：仅折叠"同一音高类别(|rel|<2 半音)"的整八度毛刺
+    for (size_t i = 0; i < n; ++i) {
+        double rel = out[i] - 12.0 * std::lround((out[i] - runOc) / 12.0);
+        if (std::fabs(rel) < 2.0)
+            out[i] = runOc + rel;
     }
     return out;
 }
