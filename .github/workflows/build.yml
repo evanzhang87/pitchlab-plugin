@@ -44,14 +44,18 @@ jobs:
 
       - name: Package
         run: |
-          cd build/PitchLab_artefacts/Release
-          zip -r PitchLab-macOS-universal.zip VST3 AU
-          ls -la
+          ls -la build/PitchLab_artefacts/Release
+          ls -la build/PitchLab_artefacts/Release/VST3
+          ls -la build/PitchLab_artefacts/Release/AU
 
+      # upload-artifact@v4 会自动再包一层 zip，所以这里直接上传目录，
+      # 避免出现"解压后还是同名 zip"的双层压缩。
       - uses: actions/upload-artifact@v4
         with:
           name: PitchLab-macOS-universal
-          path: build/PitchLab_artefacts/Release/PitchLab-macOS-universal.zip
+          path: |
+            build/PitchLab_artefacts/Release/VST3
+            build/PitchLab_artefacts/Release/AU
 
   windows:
     name: Windows (VST3 x64)
@@ -87,10 +91,10 @@ jobs:
       - name: Package
         shell: pwsh
         run: |
-          Compress-Archive -Path build\PitchLab_artefacts\Release\VST3 -DestinationPath PitchLab-Windows-x64.zip
           Get-ChildItem -Recurse build\PitchLab_artefacts\Release
 
+      # 直接上传目录，upload-artifact 会自动打包一层 zip
       - uses: actions/upload-artifact@v4
         with:
           name: PitchLab-Windows-x64
-          path: PitchLab-Windows-x64.zip
+          path: build\PitchLab_artefacts\Release\VST3
