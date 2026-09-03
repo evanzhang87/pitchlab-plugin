@@ -49,6 +49,12 @@ target_sources(PitchLab PRIVATE
     Source/PluginEditor.cpp)
 target_include_directories(PitchLab PRIVATE Source)
 
+# 只发布 VST3/AU、不发布 VST2：关闭 VST3 对 VST2 的兼容检查，
+# 否则 JUCE8 的 VST3 客户端会 #error 参数自动化冲突(见其注释)。
+if(TARGET PitchLab_SharedCode)
+    target_compile_definitions(PitchLab_SharedCode PUBLIC JUCE_VST3_CAN_REPLACE_VST2=0)
+endif()
+
 # ------- 核心 DSP 单元测试(不依赖 JUCE，本地即可跑) -------
 add_executable(dsp_test tests/dsp_test.cpp)
 target_include_directories(dsp_test PRIVATE Source)
