@@ -111,7 +111,9 @@ void PitchLabAudioProcessorEditor::refreshSnapshot() {
         x1_ = std::max(tEnd_ + 0.15, 1.0);
     x0_ = std::max(0.0, x1_ - 10.0);
 
-    // y 范围：取当前窗口内有声部分
+    // y 范围：取当前窗口内有声部分，并做"迟滞自动缩放"——
+    //   内容超出当前范围时立即扩窗(保证不裁切)，收窄时缓慢收缩(画面不抖)。
+    //   上限放宽到 ±15 半音(2.5 个八度)，大跨度跳弦/滑音也不会跑出画面。
     double mn = 1e9, mx = -1e9;
     bool any = false;
     for (size_t i = 0; i < t_.size(); ++i) {
@@ -122,15 +124,23 @@ void PitchLabAudioProcessorEditor::refreshSnapshot() {
             any = true;
         }
     }
+    double tLo, tHi;
     if (any) {
-        double mid = (mn + mx) / 2.0;
-        double half = std::max(2.5, (mx - mn) / 2.0 + 1.0);
-        half = std::min(half, 7.5);
-        m0_ = mid - half;
-        m1_ = mid + half;
+        const double pad = 1.6;
+        tLo = mn - pad;
+        tHi = mx + pad;
+        double span = tHi - tLo;
+        if (span < 6.0) { double mid = (tLo + tHi) / 2.0; tLo = mid - 3.0; tHi = mid + 3.0; }
+        if (span > 30.0) { double mid = (tLo + tHi) / 2.0; tLo = mid - 15.0; tHi = mid + 15.0; }
     } else if (!paused_) {
-        m0_ = 45.0; m1_ = 57.0;
+        tLo = 45.0; tHi = 57.0;
+    } else {
+        tLo = m0_; tHi = m1_;     // 暂停时冻结范围
     }
+    // 迟滞：超出则立即扩到能容纳；否则按 20%/帧 向目标缓慢收缩
+    m0_ = (tLo < m0_) ? tLo : m0_ + (tLo - m0_) * 0.20;
+    m1_ = (tHi > m1_) ? tHi : m1_ + (tHi - m1_) * 0.20;
+    if (m1_ - m0_ < 6.0) { double mid = (m0_ + m1_) / 2.0; m0_ = mid - 3.0; m1_ = mid + 3.0; }
     updateMaps();
 
     // ---- 实时 HUD：最近发声(0.6s 内) ----
