@@ -483,7 +483,7 @@ void PitchLabAudioProcessorEditor::paintHud(juce::Graphics& g) {
     g.setColour(DIMMED);
     g.setFont(juce::Font(10.5f));
     juce::String sub = paused_ ? "PAUSED"
-                      : (hasHost_ ? (hostPlaying_ ? "LIVE" : "STOPPED") : "LIVE");
+                      : (hasHost_ ? (hostPlaying_ ? "PLAYING" : "STOPPED") : "NO-HOST");
     if (hasHost_ && hostBpm_ > 1.0)
         sub << "  ·  bar " << (juce::int64)hostBar_ << "  " << (int)std::lround(hostBpm_) << "bpm";
     if (selA_ >= 0 && selB_ >= 0)

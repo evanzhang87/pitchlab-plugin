@@ -43,6 +43,7 @@ void PitchLabAudioProcessor::setStateInformation(const void* data, int sizeInByt
 
 void PitchLabAudioProcessor::prepareToPlay(double sampleRate, int /*samplesPerBlock*/) {
     lastSr_ = sampleRate;
+    hasHost_ = (getPlayHead() != nullptr);   // 尽早确定宿主是否提供播放头
     det_.prepare(sampleRate);
     if (auto* g = apvts.getRawParameterValue("gate")) {
         lastGateDb_ = g->load();
@@ -80,11 +81,15 @@ void PitchLabAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
     }
 
     // 读取宿主播放头：传输状态 + 时间线(秒/小节/拍号/BPM)
-    bool play = true;
+    // 只要 getPlayHead() 非空就算"有宿主"；位置暂空则视为已停止。
+    // 理由：部分 DAW(如 Studio One 系)在停止状态下 getPosition() 可能返回空，
+    // 若因此判为"无宿主"就会退回内部时钟——故改为按播放头对象是否存在判定。
+    bool play = false;
     double hostStamp = -1.0;    // <0 => 无宿主时间，用内部时钟
-    if (auto* ph = getPlayHead()) {
-        if (auto pos = ph->getPosition()) {
-            hasHost_ = true;
+    hasHost_ = (getPlayHead() != nullptr);
+    if (hasHost_) {
+        auto pos = getPlayHead()->getPosition();
+        if (pos) {
             hostPlaying_ = pos->getIsPlaying() || pos->getIsRecording();
             if (auto v = pos->getTimeInSeconds())      hostTimeSec_ = *v;
             if (auto v = pos->getBarCount())           hostBar_ = *v;
@@ -102,12 +107,11 @@ void PitchLabAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
             }
             lastHostTimeSec_ = hostTimeSec_;
         } else {
-            hasHost_ = false;
-            play = true;
+            hostPlaying_ = false;   // 有播放头但暂无位置 => 视为停止
+            play = false;
         }
     } else {
-        hasHost_ = false;
-        play = true;
+        play = true;   // 确无播放头的主机：回退内部时钟(仍可用)
     }
 
     // 只在宿主播放/录音时喂检测器；停止时清空缓冲(时间轴随宿主走，不空转)
