@@ -8,7 +8,9 @@ on:
 jobs:
   macos:
     name: macOS (VST3 + AU, universal)
-    runs-on: macos-13
+    # macos-14 = Apple Silicon 托管机，排队远快于 Intel 的 macos-13；
+    # Xcode 交叉编译两个架构切片，产物仍是通用二进制。
+    runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
 
