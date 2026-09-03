@@ -3,6 +3,7 @@
 #define _USE_MATH_DEFINES   // MSVC 需要，使 <cmath> 提供 M_PI
 #include <cmath>
 #include <cstdio>
+#include <random>
 #include <vector>
 
 #include "pitch/PitchDetector.h"
@@ -110,6 +111,24 @@ int main() {
         check("note2 rate", notes[1].vibRate, 4.5, 1.2);
         check("note2 depth", notes[1].vibDepth, 18.0, 10.0);
     } else { ++failures; std::printf("  FAIL missing note2\n"); }
+
+    std::printf("[3] 噪声容错(底噪/空音不应判成超低音)\n");
+    {
+        std::mt19937 rng(42);
+        std::uniform_real_distribution<float> dist(-0.05f, 0.05f); // 幅度明显高于 gate
+        std::vector<float> noise((size_t)(sr * 0.8));
+        for (auto& v : noise) v = dist(rng);
+        PitchDetector ndet;
+        ndet.prepare(sr);
+        ndet.setGate(0.0015);
+        ndet.process(noise.data(), (int)noise.size());
+        auto nd = ndet.take();
+        int voiced = 0;
+        for (auto& d : nd) if (d.freq > 0.0f) ++voiced;
+        double ratio = nd.empty() ? 1.0 : (double)voiced / (double)nd.size();
+        std::printf("  噪声 voiced 比例 = %.3f (应接近 0)\n", ratio);
+        check("noise voiced < 0.1", ratio, 0.0, 0.1);
+    }
 
     std::printf(failures == 0 ? "\nALL TESTS PASSED\n" : "\n%d FAILURES\n", failures);
     return failures == 0 ? 0 : 1;

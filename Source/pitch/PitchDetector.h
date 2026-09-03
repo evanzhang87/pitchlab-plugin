@@ -25,10 +25,10 @@ struct Detection {
 // ---------------------------------------------------------------------------
 inline double yinFreq(const float* x, int n, double sr,
                       double fmin = 60.0, double fmax = 1500.0,
-                      double thresh = 0.15) {
+                      double thresh = 0.15, double* confOut = nullptr) {
     const int tauMin = std::max(2, (int)std::floor(sr / fmax));
     const int tauMax = std::min(n - 3, (int)std::ceil(sr / fmin));
-    if (tauMax <= tauMin + 1) return 0.0;
+    if (tauMax <= tauMin + 1) { if (confOut) *confOut = 1.0; return 0.0; }
 
     // 前缀和，用于快速算 Σx^2 的区间和
     std::vector<double> pref(n + 1, 0.0);
@@ -62,6 +62,7 @@ inline double yinFreq(const float* x, int n, double sr,
     }
 
     int tauOpt = -1;
+    double conf = 1.0;                   // cmndf 谷底深度：周期信号≈0，噪声≈0.3~1
     const int lo = tauMin;              // 候选范围 [tauMin, tauMax]
     for (int tau = lo; tau <= tauMax; ++tau) {
         if (cmn[tau] >= thresh) continue;
@@ -73,7 +74,10 @@ inline double yinFreq(const float* x, int n, double sr,
         int best = lo;
         for (int tau = lo + 1; tau <= tauMax; ++tau)
             if (cmn[tau] < cmn[best]) best = tau;
-        if (cmn[best] < 1.0) tauOpt = best; else return 0.0;
+        if (cmn[best] < 1.0) { tauOpt = best; conf = cmn[best]; }
+        else { if (confOut) *confOut = 1.0; return 0.0; }
+    } else {
+        conf = cmn[tauOpt];
     }
 
     // 抛物线插值精化（在 d 曲线上，样本点 tau-1, tau, tau+1）→ 保留亚采样精度
@@ -88,6 +92,7 @@ inline double yinFreq(const float* x, int n, double sr,
             tauF += adj;
         }
     }
+    if (confOut) *confOut = conf;
     if (tauF <= 1.0) return 0.0;
     double f = sr / tauF;
     if (f >= fmin && f <= fmax) return f;
@@ -111,6 +116,9 @@ public:
 
     void setGate(double lin) { gate_ = lin; }
     void setFreqRange(double fmin, double fmax) { fmin_ = fmin; fmax_ = fmax; }
+    // 置信度门限：cmndf 谷底深度(0=极周期，1=纯噪声)。谷底太浅视为无声，
+    // 避免把底噪/空音误判成超低音。默认 0.25。
+    void setConfidenceThresh(double c) { confThresh_ = c; }
     double timeNow() const { return t_; }
 
     // 追加一段单声道音频（实时回调里调用；内部无分配：pending_ 已预留）
@@ -122,8 +130,11 @@ public:
             for (int i = 0; i < bufN_; ++i) rms += (double)w[i] * (double)w[i];
             rms = std::sqrt(rms / bufN_);
             float f = 0.0f;
-            if (rms > gate_)
-                f = (float)yinFreq(w, bufN_, sr_, fmin_, fmax_);
+            if (rms > gate_) {
+                double conf = 1.0;
+                f = (float)yinFreq(w, bufN_, sr_, fmin_, fmax_, 0.15, &conf);
+                if (conf > confThresh_) f = 0.0f;   // 非周期噪声 → 判无声
+            }
             out_.push_back({t_, f});
             pending_.erase(pending_.begin(), pending_.begin() + hopN_);
             t_ += (double)hopN_ / sr_;
@@ -140,6 +151,7 @@ private:
     double sr_ = 44100.0;
     int hopN_ = 512, bufN_ = 2048;
     double gate_ = 0.0015, fmin_ = 60.0, fmax_ = 1500.0;
+    double confThresh_ = 0.25;
     double t_ = 0.0;
     std::vector<float> pending_;
     std::vector<Detection> out_;
