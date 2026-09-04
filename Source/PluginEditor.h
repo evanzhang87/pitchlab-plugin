@@ -21,6 +21,7 @@ public:
     void mouseDrag(const juce::MouseEvent&) override;
     void mouseUp(const juce::MouseEvent&) override;
     void mouseWheelMove(const juce::MouseEvent&, const juce::MouseWheelDetails&) override;
+    void mouseMagnify(const juce::MouseEvent&, float) override;
 
 private:
     void timerCallback() override;

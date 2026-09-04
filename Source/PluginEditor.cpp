@@ -274,20 +274,21 @@ void PitchLabAudioProcessorEditor::mouseDown(const juce::MouseEvent& e) {
     auto p = plot();
     float px = e.position.x, py = e.position.y;
     if (p.contains(px, py)) {
-        // 平移视图：Alt+左键 / 中键 / 右键 拖动(左键单击仍用于选区)
-        if (e.mods.isAltDown() || e.mods.isMiddleButtonDown() || e.mods.isRightButtonDown()) {
-            autoFit_ = false;              // 进入手动视图
+        if (e.mods.isShiftDown()) {
+            // Shift+左键拖拽 = 选区(分析用)
+            dragging_ = true;
+            double t = x0_ + (px - p.x) / p.w * (x1_ - x0_);
+            selA_ = selB_ = clampd(t, 0.0, std::max(tEnd_, 10.0));
+            analysis_.clear();
+            repaint();
+        } else {
+            // 左键直接拖拽 = 平移视图(进入手动模式)
+            autoFit_ = false;
             panning_ = true;
             panStartX_ = px; panStartY_ = py;
             panStartX0_ = x0_; panStartX1_ = x1_;
             panStartM0_ = m0_; panStartM1_ = m1_;
-            return;
         }
-        dragging_ = true;
-        double t = x0_ + (px - p.x) / p.w * (x1_ - x0_);
-        selA_ = selB_ = clampd(t, 0.0, std::max(tEnd_, 10.0));
-        analysis_.clear();
-        repaint();
     }
 }
 
@@ -329,21 +330,42 @@ void PitchLabAudioProcessorEditor::mouseWheelMove(const juce::MouseEvent& e,
     if (!p.contains(px, py)) return;       // 只在网格区内缩放
     autoFit_ = false;                       // 进入手动视图
     const double factor = std::exp(-w.deltaY * 0.25); // 滚轮↑=放大(范围变小)，↓=缩小
-    if (e.mods.isCtrlDown() || e.mods.isAltDown()) {
-        // 缩放时间轴 X(以光标所在时刻为锚点)
+    if (e.mods.isShiftDown()) {
+        // Shift+滚轮 = 缩放时间轴 X(以光标所在时刻为锚点)
         double refr = (px - p.x) / p.w;
         double tCur = x0_ + refr * (x1_ - x0_);
         double nd = clampd((x1_ - x0_) * factor, 0.2, 120.0);
         x0_ = tCur - refr * nd;
         x1_ = x0_ + nd;
     } else {
-        // 缩放音高轴 Y(以光标处音高为锚点)
+        // 滚轮 = 缩放音高轴 Y(以光标处音高为锚点)
         double refr = (py - p.y) / p.h;
         double mCur = m1_ - refr * (m1_ - m0_);
         double nd = clampd((m1_ - m0_) * factor, 2.0, 60.0);
         m1_ = mCur + refr * nd;
         m0_ = m1_ - nd;
     }
+    updateMaps();
+    repaint();
+}
+
+void PitchLabAudioProcessorEditor::mouseMagnify(const juce::MouseEvent& e, float magnify) {
+    auto p = plot();
+    float px = e.position.x, py = e.position.y;
+    if (!p.contains(px, py)) return;
+    autoFit_ = false;
+    // 捏合缩放：时间+音高二维同时缩放，锚点=光标(magnify>0 放大)
+    const double k = std::exp(-(double)magnify * 0.4);
+    double refrX = (px - p.x) / p.w;
+    double tCur = x0_ + refrX * (x1_ - x0_);
+    double ndx = clampd((x1_ - x0_) * k, 0.2, 120.0);
+    x0_ = tCur - refrX * ndx;
+    x1_ = x0_ + ndx;
+    double refrY = (py - p.y) / p.h;
+    double mCur = m1_ - refrY * (m1_ - m0_);
+    double ndy = clampd((m1_ - m0_) * k, 2.0, 60.0);
+    m1_ = mCur + refrY * ndy;
+    m0_ = m1_ - ndy;
     updateMaps();
     repaint();
 }
@@ -614,7 +636,7 @@ void PitchLabAudioProcessorEditor::paintReport(juce::Graphics& g) {
     g.fillRect(0.0f, yTop - 3.0f, w, (float)getHeight() - yTop + 3.0f);
     g.setFont(juce::Font(11.0f));
     g.setColour(LABEL);
-    g.drawText("drag=select · Alt+drag / 中键=pan · wheel=zoom pitch · Ctrl+wheel=zoom time · Fit=AUTO",
+    g.drawText("drag=pan · Shift+drag=select · wheel=zoom pitch · Shift+wheel=zoom time · pinch=2D zoom · Fit=AUTO",
                p.x + 4, yTop, w - 220, 15, juce::Justification::centredLeft);
     float y = (float)getHeight() - 18.0f;
     if (analysis_.empty()) {
@@ -651,7 +673,8 @@ void PitchLabAudioProcessorEditor::paintButtons(juce::Graphics& g) {
         g.fillRoundedRectangle(rf, 4.0f);
         g.setColour(accent ? juce::Colour(0xff3a3320) : GRID_HI);
         g.drawRoundedRectangle(rf, 4.0f, 1.0f);
-        g.setColour(accent ? WARN : WHITE);
+        // accent 高亮时用深色文字保持可读(黄底+黄字会看不清)
+        g.setColour(accent ? juce::Colour(0xff14161b) : WHITE);
         g.setFont(juce::Font(11.5f).boldened());
         const char* label = i == 0 ? (paused_ ? "Resume" : "Pause")
                                    : (i == 1 ? "Clear"
