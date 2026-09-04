@@ -100,11 +100,11 @@ void PitchLabAudioProcessorEditor::updateMaps() {
 }
 
 juce::Rectangle<int> PitchLabAudioProcessorEditor::btnRect(int idx) const {
-    static const int ws[3] = {70, 70, 88};
+    static const int ws[4] = {70, 70, 88, 70}; // Pause, Clear, Analyze, Fit
     const int gap = 6, top = 8, h = 24;
-    int right = getWidth() - 10;
-    int x = right;
-    for (int i = 2; i >= idx; --i) x -= (i == idx ? 0 : ws[i] + gap) + (i == idx ? ws[i] : 0);
+    int x = getWidth() - 10;
+    for (int i = 3; i > idx; --i) x -= ws[i] + gap;
+    x -= ws[idx];
     return {x, top, ws[idx], h};
 }
 
@@ -125,49 +125,58 @@ void PitchLabAudioProcessorEditor::refreshSnapshot() {
     if (t_.size() > 1) dt_ = t_[1] - t_[0];
     tEnd_ = t_.empty() ? 0.0 : t_.back();
 
-    // x 窗口：只在「手动未暂停」且「(无宿主 或 宿主正在播放/录音)」时滚动；
-    // 宿主停止时冻结(等价于暂停)，时间轴与宿主走带同步。
-    bool scroll = (!paused_) && (!hasHost_ || hostPlaying_);
-    double anchor = hasHost_ ? hostTime_ : (t_.empty() ? 0.0 : t_.back());
-    if (scroll) {
-        x1_ = std::max(anchor + 0.15, 1.0);
-        x0_ = std::max(0.0, x1_ - 10.0);
-    } else if (paused_) {
-        x1_ = pauseT_ + 0.15;
-        x0_ = std::max(0.0, x1_ - 10.0);
-    }
-    // 宿主停止：保持当前 x0_/x1_ 不动(冻结)
-
-    // y 范围：取当前窗口内有声部分，并做"迟滞自动缩放"——
-    //   内容超出当前范围时立即扩窗(保证不裁切)，收窄时缓慢收缩(画面不抖)。
-    //   上限放宽到 ±15 半音(2.5 个八度)，大跨度跳弦/滑音也不会跑出画面。
-    double mn = 1e9, mx = -1e9;
-    bool any = false;
-    for (size_t i = 0; i < t_.size(); ++i) {
-        if (f_[i] > 0.0 && t_[i] >= x0_ && t_[i] <= x1_) {
-            double m = pitchlab::midiFromFreq(f_[i]);
-            if (m < mn) mn = m;
-            if (m > mx) mx = m;
-            any = true;
+    // x 窗口 & y 范围：
+    //   AUTO(默认)：x 只在「未暂停」且「(无宿主 或 宿主正在播放/录音)」时滚动；宿主停止时冻结。
+    //              y 做迟滞自动缩放(内容超出立即扩窗，收窄缓慢收缩)。
+    //   手动(用户滚轮缩放 / Alt-拖动平移后)：x/y 完全由用户控制，不再被自动逻辑覆盖，
+    //             以便静态放大查看某个区间的最高/最低点。Fit 按钮可回到 AUTO。
+    if (autoFit_) {
+        bool scroll = (!paused_) && (!hasHost_ || hostPlaying_);
+        double anchor = hasHost_ ? hostTime_ : (t_.empty() ? 0.0 : t_.back());
+        if (scroll) {
+            x1_ = std::max(anchor + 0.15, 1.0);
+            x0_ = std::max(0.0, x1_ - 10.0);
+        } else if (paused_) {
+            x1_ = pauseT_ + 0.15;
+            x0_ = std::max(0.0, x1_ - 10.0);
         }
-    }
-    double tLo, tHi;
-    if (any) {
-        const double pad = 1.6;
-        tLo = mn - pad;
-        tHi = mx + pad;
-        double span = tHi - tLo;
-        if (span < 6.0) { double mid = (tLo + tHi) / 2.0; tLo = mid - 3.0; tHi = mid + 3.0; }
-        if (span > 36.0) { double mid = (tLo + tHi) / 2.0; tLo = mid - 18.0; tHi = mid + 18.0; }
-    } else if (!paused_) {
-        tLo = 45.0; tHi = 57.0;
+        // 宿主停止：保持当前 x0_/x1_ 不动(冻结)
+
+        // y 范围：取当前窗口内有声部分，并做"迟滞自动缩放"——
+        //   内容超出当前范围时立即扩窗(保证不裁切)，收窄时缓慢收缩(画面不抖)。
+        //   上限放宽到 ±15 半音(2.5 个八度)，大跨度跳弦/滑音也不会跑出画面。
+        double mn = 1e9, mx = -1e9;
+        bool any = false;
+        for (size_t i = 0; i < t_.size(); ++i) {
+            if (f_[i] > 0.0 && t_[i] >= x0_ && t_[i] <= x1_) {
+                double m = pitchlab::midiFromFreq(f_[i]);
+                if (m < mn) mn = m;
+                if (m > mx) mx = m;
+                any = true;
+            }
+        }
+        double tLo, tHi;
+        if (any) {
+            const double pad = 1.6;
+            tLo = mn - pad;
+            tHi = mx + pad;
+            double span = tHi - tLo;
+            if (span < 6.0) { double mid = (tLo + tHi) / 2.0; tLo = mid - 3.0; tHi = mid + 3.0; }
+            if (span > 36.0) { double mid = (tLo + tHi) / 2.0; tLo = mid - 18.0; tHi = mid + 18.0; }
+        } else if (!paused_) {
+            tLo = 45.0; tHi = 57.0;
+        } else {
+            tLo = m0_; tHi = m1_;     // 暂停时冻结范围
+        }
+        // 迟滞：超出则立即扩到能容纳；否则按 20%/帧 向目标缓慢收缩
+        m0_ = (tLo < m0_) ? tLo : m0_ + (tLo - m0_) * 0.20;
+        m1_ = (tHi > m1_) ? tHi : m1_ + (tHi - m1_) * 0.20;
+        if (m1_ - m0_ < 6.0) { double mid = (m0_ + m1_) / 2.0; m0_ = mid - 3.0; m1_ = mid + 3.0; }
     } else {
-        tLo = m0_; tHi = m1_;     // 暂停时冻结范围
+        // 手动模式：x/y 由用户控制；仅保证窗口合法
+        if (x1_ <= x0_) x1_ = x0_ + 0.5;
+        if (m1_ <= m0_) m1_ = m0_ + 3.0;
     }
-    // 迟滞：超出则立即扩到能容纳；否则按 20%/帧 向目标缓慢收缩
-    m0_ = (tLo < m0_) ? tLo : m0_ + (tLo - m0_) * 0.20;
-    m1_ = (tHi > m1_) ? tHi : m1_ + (tHi - m1_) * 0.20;
-    if (m1_ - m0_ < 6.0) { double mid = (m0_ + m1_) / 2.0; m0_ = mid - 3.0; m1_ = mid + 3.0; }
     updateMaps();
 
     // ---- 实时 HUD：最近发声(0.6s 内) ----
@@ -238,9 +247,15 @@ void PitchLabAudioProcessorEditor::doAnalyze() {
     repaint();
 }
 
+void PitchLabAudioProcessorEditor::doFit() {
+    autoFit_ = true;          // 回到自动滚动 + 自动缩放
+    if (paused_) pauseT_ = tEnd_;
+    repaint();
+}
+
 bool PitchLabAudioProcessorEditor::hitButton(const juce::MouseEvent& e,
                                              juce::Rectangle<int>& out) {
-    for (int i = 0; i < 3; ++i) {
+    for (int i = 0; i < 4; ++i) {
         auto r = btnRect(i);
         if (r.contains(e.getPosition())) { out = r; return true; }
     }
@@ -253,11 +268,21 @@ void PitchLabAudioProcessorEditor::mouseDown(const juce::MouseEvent& e) {
         if (btn == btnRect(0)) doPauseResume();
         else if (btn == btnRect(1)) doClear();
         else if (btn == btnRect(2)) doAnalyze();
+        else if (btn == btnRect(3)) doFit();
         return;
     }
     auto p = plot();
-    float px = (float)e.getPosition().x, py = (float)e.getPosition().y;
+    float px = e.position.x, py = e.position.y;
     if (p.contains(px, py)) {
+        // 平移视图：Alt+左键 / 中键 / 右键 拖动(左键单击仍用于选区)
+        if (e.mods.isAltDown() || e.mods.isMiddleButtonDown() || e.mods.isRightButtonDown()) {
+            autoFit_ = false;              // 进入手动视图
+            panning_ = true;
+            panStartX_ = px; panStartY_ = py;
+            panStartX0_ = x0_; panStartX1_ = x1_;
+            panStartM0_ = m0_; panStartM1_ = m1_;
+            return;
+        }
         dragging_ = true;
         double t = x0_ + (px - p.x) / p.w * (x1_ - x0_);
         selA_ = selB_ = clampd(t, 0.0, std::max(tEnd_, 10.0));
@@ -267,19 +292,59 @@ void PitchLabAudioProcessorEditor::mouseDown(const juce::MouseEvent& e) {
 }
 
 void PitchLabAudioProcessorEditor::mouseDrag(const juce::MouseEvent& e) {
+    if (panning_) {
+        auto p = plot();
+        // 拖动平移：内容跟随鼠标移动(左拖看更早时间，下拖看更高音高)
+        double dtw = (e.position.x - panStartX_) / p.w * (panStartX1_ - panStartX0_);
+        double dm  = (e.position.y - panStartY_) / p.h * (panStartM1_ - panStartM0_);
+        x0_ = panStartX0_ - dtw;
+        x1_ = panStartX1_ - dtw;
+        m0_ = panStartM0_ + dm;
+        m1_ = panStartM1_ + dm;
+        updateMaps();
+        repaint();
+        return;
+    }
     if (!dragging_) return;
     auto p = plot();
-    float px = (float)e.getPosition().x;
+    float px = e.position.x;
     double t = x0_ + (px - p.x) / p.w * (x1_ - x0_);
     selB_ = clampd(t, 0.0, std::max(tEnd_, 10.0));
     repaint();
 }
 
 void PitchLabAudioProcessorEditor::mouseUp(const juce::MouseEvent&) {
+    panning_ = false;
     if (!dragging_) return;
     dragging_ = false;
     if (selA_ >= 0 && selB_ >= 0 && std::fabs(selB_ - selA_) < 0.04)
         selA_ = selB_ = -1.0; // 视为单击，取消选区
+    repaint();
+}
+
+void PitchLabAudioProcessorEditor::mouseWheelMove(const juce::MouseEvent& e,
+                                                  const juce::MouseWheelDetails& w) {
+    auto p = plot();
+    float px = e.position.x, py = e.position.y;
+    if (!p.contains(px, py)) return;       // 只在网格区内缩放
+    autoFit_ = false;                       // 进入手动视图
+    const double factor = std::exp(-w.deltaY * 0.25); // 滚轮↑=放大(范围变小)，↓=缩小
+    if (e.mods.isCtrlDown() || e.mods.isAltDown()) {
+        // 缩放时间轴 X(以光标所在时刻为锚点)
+        double refr = (px - p.x) / p.w;
+        double tCur = x0_ + refr * (x1_ - x0_);
+        double nd = clampd((x1_ - x0_) * factor, 0.2, 120.0);
+        x0_ = tCur - refr * nd;
+        x1_ = x0_ + nd;
+    } else {
+        // 缩放音高轴 Y(以光标处音高为锚点)
+        double refr = (py - p.y) / p.h;
+        double mCur = m1_ - refr * (m1_ - m0_);
+        double nd = clampd((m1_ - m0_) * factor, 2.0, 60.0);
+        m1_ = mCur + refr * nd;
+        m0_ = m1_ - nd;
+    }
+    updateMaps();
     repaint();
 }
 
@@ -488,6 +553,7 @@ void PitchLabAudioProcessorEditor::paintHud(juce::Graphics& g) {
         sub << "  ·  bar " << (juce::int64)hostBar_ << "  " << (int)std::lround(hostBpm_) << "bpm";
     if (hasHost_)
         sub << "  ·  t=" << juce::String(hostTime_, 1) << "s";
+    sub << (autoFit_ ? "  ·  [AUTO]" : "  ·  [ZOOM]");
     if (selA_ >= 0 && selB_ >= 0)
         sub << "  ·  sel " << juce::String(std::min(selA_, selB_), 2) << "-"
             << juce::String(std::max(selA_, selB_), 2) << "s";
@@ -548,7 +614,7 @@ void PitchLabAudioProcessorEditor::paintReport(juce::Graphics& g) {
     g.fillRect(0.0f, yTop - 3.0f, w, (float)getHeight() - yTop + 3.0f);
     g.setFont(juce::Font(11.0f));
     g.setColour(LABEL);
-    g.drawText("selection report  (drag on grid to select, then Analyze)",
+    g.drawText("drag=select · Alt+drag / 中键=pan · wheel=zoom pitch · Ctrl+wheel=zoom time · Fit=AUTO",
                p.x + 4, yTop, w - 220, 15, juce::Justification::centredLeft);
     float y = (float)getHeight() - 18.0f;
     if (analysis_.empty()) {
@@ -577,9 +643,9 @@ void PitchLabAudioProcessorEditor::paintReport(juce::Graphics& g) {
 }
 
 void PitchLabAudioProcessorEditor::paintButtons(juce::Graphics& g) {
-    for (int i = 0; i < 3; ++i) {
+    for (int i = 0; i < 4; ++i) {
         auto r = btnRect(i);
-        bool accent = (i == 0 && paused_);
+        bool accent = (i == 0 && paused_) || (i == 3 && !autoFit_);
         juce::Rectangle<float> rf = r.toFloat();
         g.setColour(accent ? WARN : juce::Colour(0xff262c38));
         g.fillRoundedRectangle(rf, 4.0f);
@@ -588,7 +654,8 @@ void PitchLabAudioProcessorEditor::paintButtons(juce::Graphics& g) {
         g.setColour(accent ? WARN : WHITE);
         g.setFont(juce::Font(11.5f).boldened());
         const char* label = i == 0 ? (paused_ ? "Resume" : "Pause")
-                                   : (i == 1 ? "Clear" : "Analyze");
+                                   : (i == 1 ? "Clear"
+                                      : (i == 2 ? "Analyze" : "Fit"));
         g.drawText(label, rf, juce::Justification::centred);
     }
 }

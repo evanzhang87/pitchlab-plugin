@@ -20,6 +20,7 @@ public:
     void mouseDown(const juce::MouseEvent&) override;
     void mouseDrag(const juce::MouseEvent&) override;
     void mouseUp(const juce::MouseEvent&) override;
+    void mouseWheelMove(const juce::MouseEvent&, const juce::MouseWheelDetails&) override;
 
 private:
     void timerCallback() override;
@@ -42,6 +43,7 @@ private:
     void doPauseResume();
     void doClear();
     void doAnalyze();
+    void doFit();                        // 恢复自动视图(Auto-fit)
     bool hitButton(const juce::MouseEvent&, juce::Rectangle<int>& out);
     juce::Rectangle<int> btnRect(int idx) const;
 
@@ -70,6 +72,13 @@ private:
     double pauseT_ = 0.0;
     double selA_ = -1.0, selB_ = -1.0; // 选区(秒)，<0 表示无
     bool dragging_ = false;
+
+    // ---- 视图缩放/平移 ----
+    bool autoFit_ = true;                // true=自动滚动/自动缩放；false=用户手动视图
+    bool panning_ = false;               // 正在 Alt/中键拖动平移
+    float panStartX_ = 0.0f, panStartY_ = 0.0f;
+    double panStartX0_ = 0.0, panStartX1_ = 0.0;
+    double panStartM0_ = 0.0, panStartM1_ = 0.0;
 
     std::vector<pitchlab::NoteStat> analysis_; // 选区分析结果
     double analysisT0_ = 0.0, analysisT1_ = 0.0;
